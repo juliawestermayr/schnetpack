@@ -229,9 +229,6 @@ class AseInterface:
                 (default False).
         """
         molecule_path = os.path.join(self.working_dir, "%s.%s" % (name, file_format))
-        # For extended xyz format, plain is needed since ase can not parse
-        # the extxyz it writes
-        # TODO: plain was removed from ase. does it still work?
         write(molecule_path, self.molecule, format=file_format, append=append)
 
     def calculate_single_point(self):

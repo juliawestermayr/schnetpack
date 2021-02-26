@@ -2,6 +2,7 @@ import os
 import torch
 import schnetpack as spk
 
+
 from tests.assertions import assert_output_shape_valid, assert_params_changed
 from tests.fixtures import *
 
@@ -21,7 +22,9 @@ def test_parameter_update_schnet(
         exclude += ["distance_expansion"]
 
     assert_params_changed(
-        schnet, schnet_batch, exclude=exclude,
+        schnet,
+        schnet_batch,
+        exclude=exclude,
     )
 
 
@@ -126,7 +129,10 @@ def test_shape_tiled_multilayer_network(
 
 
 def test_shape_elemental_gate(
-    elemental_gate_layer, elements, random_int_input, random_shape,
+    elemental_gate_layer,
+    elements,
+    random_int_input,
+    random_shape,
 ):
     out_shape = random_shape + [len(elements)]
     assert_output_shape_valid(elemental_gate_layer, [random_int_input], out_shape)
@@ -153,7 +159,7 @@ def test_functionality_cutoff(cutoff_layer, cutoff, random_interatomic_distances
 
 def x_test_shape_neighbor_elements(atomic_numbers, neighbors):
     # ToDo: change Docstring or squeeze()
-    model = NeighborElements()
+    model = spk.nn.NeighborElements()
     inputs = [atomic_numbers.unsqueeze(-1), neighbors]
     out_shape = list(neighbors.shape)
     assert_output_shape_valid(model, inputs, out_shape)
@@ -165,3 +171,22 @@ def teardown_module():
     """
     if os.path.exists("before"):
         os.remove("before")
+
+
+def test_charge_correction(schnet_batch, n_atom_basis):
+    """
+    Test if charge correction yields the desired total charges.
+
+    """
+    model = spk.AtomisticModel(
+        spk.SchNet(n_atom_basis),
+        spk.atomistic.DipoleMoment(
+            n_atom_basis, charge_correction="q", contributions="q"
+        ),
+    )
+    q = torch.randint(0, 10, (schnet_batch["_positions"].shape[0], 1))
+    schnet_batch.update(q=q)
+
+    q_i = model(schnet_batch)["q"]
+
+    assert torch.allclose(q.float(), q_i.sum(1), atol=1e-6)
