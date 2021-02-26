@@ -86,6 +86,9 @@ class SchnetPackCalculator(MDCalculator):
         Args:
             system (schnetpack.md.System): System object containing current state of the simulation.
         """
+        # set model to evaluation mode to disable graph creation
+        self.model.eval()
+
         inputs = self._generate_input(system)
         self.results = self.model(inputs)
         self._update_system(system)
@@ -225,9 +228,11 @@ class SchnetPackCalculator(MDCalculator):
         if isinstance(
             self.neighbor_list, schnetpack.md.neighbor_lists.DualNeighborList
         ):
-            neighbor_list_lr, neighbor_mask_lr, offsets_lr = self.neighbor_list.get_neighbors_lr(
-                system
-            )
+            (
+                neighbor_list_lr,
+                neighbor_mask_lr,
+                offsets_lr,
+            ) = self.neighbor_list.get_neighbors_lr(system)
 
             neighbor_list_lr, neighbor_mask_lr, offsets_lr = self._format_neighbors(
                 neighbor_list_lr,

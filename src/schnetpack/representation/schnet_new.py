@@ -1,23 +1,26 @@
 import torch
 from torch import nn
+from torch_scatter import segment_csr
+
 
 from schnetpack.nn import Dense
 
 
-class ContinuousFilterConv(nn.Module):
-    r"""Continuous-filter convolution block used in SchNet module.
+def cfconv(x, Wij, seg_i, idx_j, reduce="sum"):
+    """
+    Continuous-filter convolution.
 
     Args:
-        n_in (int): number of input (i.e. atomic embedding) dimensions.
-        n_filters (int): number of filter dimensions.
-        n_out (int): number of output dimensions.
-        filter_network (nn.Module): filter block.
-        cutoff_network (nn.Module, optional): if None, no cut off function is used.
-        activation (callable, optional): if None, no activation function is used.
-        normalize_filter (bool, optional): If True, normalize filter to the number
-            of neighbors when aggregating.
-        axis (int, optional): axis over which convolution should be applied.
+        x: input values
+        Wij: filter
+        seg_i: segments of neighbors belonging to i
+        idx_j: index of neighbors j
+        reduce: reduction method (sum, mean, ...)
+
+    Returns:
+        convolved inputs
 
     """
-
-    def __init__(self, x, Wij, ):
+    x_ij = x[idx_j] * Wij
+    y = segment_csr(x_ij, seg_i, reduce=reduce)
+    return y
