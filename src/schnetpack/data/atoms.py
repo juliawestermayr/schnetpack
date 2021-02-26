@@ -673,6 +673,10 @@ def _convert_atoms(
     return inputs
 
 
+# def _convert_atoms_new():
+
+
+
 def torchify_dict(property_dict):
     torch_properties = {}
     for pname, prop in property_dict.items():
