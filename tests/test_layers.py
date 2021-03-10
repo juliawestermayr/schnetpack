@@ -2,6 +2,8 @@ import os
 import torch
 import schnetpack as spk
 
+import pytest
+
 
 from tests.assertions import assert_output_shape_valid, assert_params_changed
 from tests.fixtures import *
@@ -9,21 +11,25 @@ from tests.fixtures import *
 
 # test if parameters of model building blocks are updated
 def test_parameter_update_schnet(
-    schnet, schnet_batch, n_interactions, trainable_gaussians
+    schnet,
+    rnd_atomic_numbers,
+    rnd_r_ij,
+    rnd_idx_i,
+    rnd_idx_j,
+    n_interactions,
+    trainable_rbf,
 ):
+    inputs = [rnd_atomic_numbers, rnd_r_ij, rnd_idx_i, rnd_idx_j]
+
     # define layers that are not updated
-    exclude = [
-        "interactions.{}.cutoff_network".format(i) for i in range(n_interactions)
-    ] + [
-        "interactions.{}.cfconv.cutoff_network".format(i) for i in range(n_interactions)
-    ]
+    exclude = ["cutoff_fn"]
     # if not trainable gaussians, exclude distance expansion layer
-    if not trainable_gaussians:
-        exclude += ["distance_expansion"]
+    if not trainable_rbf:
+        exclude.append("radial_basis")
 
     assert_params_changed(
         schnet,
-        schnet_batch,
+        inputs,
         exclude=exclude,
     )
 
@@ -48,43 +54,53 @@ def test_parameter_update_schnet(
 
 
 # test shapes of spk.representation
-def test_shape_schnet(schnet, schnet_batch, schnet_output_shape):
-    assert_output_shape_valid(schnet, [schnet_batch], schnet_output_shape)
+def test_shape_schnet(
+    schnet,
+    rnd_atomic_numbers,
+    rnd_r_ij,
+    rnd_idx_i,
+    rnd_idx_j,
+    rnd_allatoms,
+    n_atom_basis,
+):
+    schnet_output_shape = [rnd_allatoms, n_atom_basis]
+    assert_output_shape_valid(
+        schnet,
+        [rnd_atomic_numbers, rnd_r_ij, rnd_idx_i, rnd_idx_j],
+        schnet_output_shape,
+    )
 
 
 def test_shape_schnetinteraction(
     schnet_interaction,
-    random_atomic_env,
-    r_ij,
-    neighbors,
-    neighbor_mask,
-    f_ij,
-    interaction_output_shape,
+    rnd_atomic_environments,
+    rnd_f_ij,
+    rnd_idx_i,
+    rnd_idx_j,
+    rnd_rcut_ij,
+    rnd_allatoms,
+    n_atom_basis,
 ):
-    inputs = [random_atomic_env, r_ij, neighbors, neighbor_mask, f_ij]
-    assert_output_shape_valid(schnet_interaction, inputs, interaction_output_shape)
+    inputs = [rnd_atomic_environments, rnd_f_ij, rnd_idx_i, rnd_idx_j, rnd_rcut_ij]
+    assert_output_shape_valid(schnet_interaction, inputs, [rnd_allatoms, n_atom_basis])
 
 
 # test shapes of spk.nn
 def test_shape_cfconv(
     cfconv_layer,
-    random_atomic_env,
-    r_ij,
-    neighbors,
-    neighbor_mask,
-    f_ij,
-    cfconv_output_shape,
+    rnd_atomic_environments_filter,
+    rnd_filters,
+    rnd_idx_i,
+    rnd_idx_j,
+    rnd_allatoms,
+    n_filters,
 ):
-    inputs = [random_atomic_env, r_ij, neighbors, neighbor_mask, f_ij]
-    assert_output_shape_valid(cfconv_layer, inputs, cfconv_output_shape)
+    inputs = [rnd_atomic_environments_filter, rnd_filters, rnd_idx_i, rnd_idx_j]
+    assert_output_shape_valid(cfconv_layer, inputs, [rnd_allatoms, n_filters])
 
 
-def test_gaussian_smearing(
-    gaussion_smearing_layer, random_interatomic_distances, gaussian_smearing_shape
-):
-    assert_output_shape_valid(
-        gaussion_smearing_layer, [random_interatomic_distances], gaussian_smearing_shape
-    )
+def test_radial_basis(radial_basis, rnd_d_ij, radial_basis_shape):
+    assert_output_shape_valid(radial_basis, [rnd_d_ij], radial_basis_shape)
 
 
 def test_shape_dense(dense_layer, random_float_input, random_shape, random_output_dim):
@@ -138,9 +154,9 @@ def test_shape_elemental_gate(
     assert_output_shape_valid(elemental_gate_layer, [random_int_input], out_shape)
 
 
-def test_shape_cutoff(cutoff_layer, random_interatomic_distances):
-    out_shape = list(random_interatomic_distances.shape)
-    assert_output_shape_valid(cutoff_layer, [random_interatomic_distances], out_shape)
+def test_shape_cutoff(cutoff_fn, rnd_d_ij):
+    out_shape = list(rnd_d_ij.shape)
+    assert_output_shape_valid(cutoff_fn, [rnd_d_ij], out_shape)
 
 
 # functionality tests
@@ -150,9 +166,9 @@ def test_get_item(schnet_batch):
         assert torch.all(torch.eq(get_item(schnet_batch), value))
 
 
-def test_functionality_cutoff(cutoff_layer, cutoff, random_interatomic_distances):
-    mask = random_interatomic_distances > cutoff
-    cutoff_layer_mask = cutoff_layer(random_interatomic_distances)
+def test_functionality_cutoff(cutoff_fn, cutoff, rnd_d_ij):
+    mask = rnd_d_ij > cutoff
+    cutoff_layer_mask = cutoff_fn(rnd_d_ij)
 
     assert ((cutoff_layer_mask == 0.0) == mask).all()
 
@@ -173,13 +189,21 @@ def teardown_module():
         os.remove("before")
 
 
+@pytest.mark.skip(reason="Atomistic model needs to be rebuild")
 def test_charge_correction(schnet_batch, n_atom_basis):
     """
     Test if charge correction yields the desired total charges.
 
     """
+    radial_basis = spk.nn.GaussianSmearing()
+    cutoff_fn = spk.nn.CosineCutoff(5.0)
     model = spk.AtomisticModel(
-        spk.SchNet(n_atom_basis),
+        spk.SchNet(
+            n_atom_basis,
+            n_interactions=3,
+            radial_basis=radial_basis,
+            cutoff_fn=cutoff_fn,
+        ),
         spk.atomistic.DipoleMoment(
             n_atom_basis, charge_correction="q", contributions="q"
         ),

@@ -25,8 +25,6 @@ class ISO17(DownloadableAtomsData):
                         test_within - remaining 20% unseen steps of reference trajectories
                         test_other - remaining 20% unseen MD trajectories
                         test_eq - equilibrium conformations of test trajectories
-        subset (list, optional): Deprecated! Do not use! Subsets are created with
-            AtomsDataSubset class.
         load_only (list, optional): reduced set of properties to be loaded
         download (bool): set to true if dataset should be downloaded. (default: True)
         collect_triples (false): set to true to compute triples for angular functions
@@ -55,9 +53,8 @@ class ISO17(DownloadableAtomsData):
         fold,
         download=True,
         load_only=None,
-        subset=None,
         collect_triples=False,
-        environment_provider=spk.environment.SimpleEnvironmentProvider(),
+        environment_provider=spk.environment.AseEnvironmentProvider(5.0),
     ):
 
         if fold not in self.existing_folds:
@@ -72,7 +69,6 @@ class ISO17(DownloadableAtomsData):
 
         super().__init__(
             dbpath=dbpath,
-            subset=subset,
             load_only=load_only,
             collect_triples=collect_triples,
             download=download,

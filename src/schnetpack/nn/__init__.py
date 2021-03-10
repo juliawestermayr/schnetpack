@@ -11,3 +11,4 @@ from schnetpack.nn.cfconv import *
 from schnetpack.nn.cutoff import *
 from schnetpack.nn.initializers import *
 from schnetpack.nn.neighbors import *
+from schnetpack.nn.radial import *

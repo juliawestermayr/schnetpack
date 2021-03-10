@@ -47,7 +47,7 @@ class OrganicMaterialsDatabase(DownloadableAtomsData):
         subset=None,
         load_only=None,
         collect_triples=False,
-        environment_provider=spk.environment.SimpleEnvironmentProvider(),
+        environment_provider=spk.environment.AseEnvironmentProvider(5.0),
     ):
         available_properties = [OrganicMaterialsDatabase.BandGap]
 

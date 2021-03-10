@@ -11,6 +11,10 @@ class Properties:
     R = position
     cell = "_cell"
     pbc = "_pbc"
+    seg_m = "_seg_m"
+    idx_i = "_idx_i"
+    idx_j = "_idx_j"
+    n_atoms = "_n_atoms"
     neighbors = "_neighbors"
     neighbor_mask = "_neighbor_mask"
     cell_offset = "_cell_offset"

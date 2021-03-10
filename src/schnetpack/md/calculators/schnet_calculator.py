@@ -280,7 +280,7 @@ class SchnetPackCalculator(MDCalculator):
 
         # Check for different models, cutoff is set in different functions
         if isinstance(representation, schnetpack.representation.SchNet):
-            model_cutoff = representation.interactions[0].cutoff_network.cutoff
+            model_cutoff = representation.interactions[0].cutoff_fn.cutoff
         elif isinstance(representation, schnetpack.representation.BehlerSFBlock):
             model_cutoff = representation.cutoff.cutoff
         elif isinstance(representation, schnetpack.representation.StandardizeSF):

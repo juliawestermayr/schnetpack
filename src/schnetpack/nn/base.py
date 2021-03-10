@@ -1,4 +1,7 @@
+from typing import Callable
+
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.nn.init import xavier_uniform_
 
@@ -23,6 +26,7 @@ class Dense(nn.Linear):
         bias_init (callable, optional): bias initializer from current bias.
 
     """
+    has_activation: bool
 
     def __init__(
         self,
@@ -35,9 +39,12 @@ class Dense(nn.Linear):
     ):
         self.weight_init = weight_init
         self.bias_init = bias_init
-        self.activation = activation
-        # initialize linear layer y = xW^T + b
         super(Dense, self).__init__(in_features, out_features, bias)
+
+        self.activation = activation
+        if self.activation is None:
+            self.activation = nn.Identity()
+        # initialize linear layer y = xW^T + b
 
     def reset_parameters(self):
         """Reinitialize model weight and bias values."""
@@ -56,10 +63,10 @@ class Dense(nn.Linear):
 
         """
         # compute linear layer y = xW^T + b
-        y = super(Dense, self).forward(inputs)
+        # y = super(Dense, self).forward(inputs)
+        y = F.linear(inputs, self.weight, self.bias)
         # add activation function
-        if self.activation:
-            y = self.activation(y)
+        y = self.activation(y)
         return y
 
 

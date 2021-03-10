@@ -6,17 +6,17 @@ from torch import nn
 __all__ = ["CosineCutoff", "MollifierCutoff", "HardCutoff", "get_cutoff_by_string"]
 
 
-def get_cutoff_by_string(key):
+def get_cutoff_by_string(key, cutoff):
     # build cutoff module
     if key == "hard":
-        cutoff_network = HardCutoff
+        cutoff_fn = HardCutoff(cutoff)
     elif key == "cosine":
-        cutoff_network = CosineCutoff
+        cutoff_fn = CosineCutoff(cutoff)
     elif key == "mollifier":
-        cutoff_network = MollifierCutoff
+        cutoff_fn = MollifierCutoff(cutoff)
     else:
         raise NotImplementedError("cutoff_function {} is unknown".format(key))
-    return cutoff_network
+    return cutoff_fn
 
 
 class CosineCutoff(nn.Module):

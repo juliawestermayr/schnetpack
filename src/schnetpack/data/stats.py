@@ -22,9 +22,9 @@ class StatisticsAccumulator:
 
         """
         # Initialize state variables
-        self.count = 0  # Sample count
-        self.mean = 0  # Incremental average
-        self.M2 = 0  # Sum of squares of differences
+        self.count = torch.tensor(0.0)  # Sample count
+        self.mean = torch.tensor(0.0)  # Incremental average
+        self.M2 = torch.tensor(0.0)  # Sum of squares of differences
         self.batch = batch
         self.atomistic = atomistic
 
@@ -38,22 +38,25 @@ class StatisticsAccumulator:
         """
 
         # Check different cases
-        if not self.batch and not self.atomistic:
-            self._add_sample(sample_value)
-        elif not self.batch and self.atomistic:
-            n_atoms = sample_value.size(0)
-            for i in range(n_atoms):
-                self._add_sample(sample_value[i, :])
-        elif self.batch and not self.atomistic:
-            n_batch = sample_value.size(0)
-            for i in range(n_batch):
-                self._add_sample(sample_value[i, :])
-        else:
-            n_batch = sample_value.shape[0]
-            n_atoms = sample_value.shape[1]
-            for i in range(n_batch):
-                for j in range(n_atoms):
-                    self._add_sample(sample_value[i, j, :])
+        pass
+        # if not self.batch and not self.atomistic:
+        #     self._add_sample(sample_value)
+        # elif not self.batch and self.atomistic:
+        #     n_atoms = sample_value.size(0)
+        #     for i in range(n_atoms):
+        #         self._add_sample(sample_value[i, :])
+        # elif self.batch and not self.atomistic:
+        #     n_batch = sample_value.size(0)
+        #     for i in range(n_batch):
+        #         self._add_sample(sample_value[i, :])
+        # else:
+        #     n_batch = sample_value.shape[0]
+        #     n_atoms = sample_value.shape[1]
+        #     for i in range(n_batch):
+        #         for j in range(n_atoms):
+        #             self._add_sample(sample_value[i, j, :])
+        # TODO: reimplement
+        self.count += 1
 
     def _add_sample(self, sample_value):
         # Update count

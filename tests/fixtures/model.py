@@ -9,18 +9,17 @@ __all__ = [
     "n_filters",
     "n_interactions",
     "cutoff",
-    "n_gaussians",
+    "n_rbf",
     "normalize_filter",
     "coupled_interactions",
     "return_intermediate",
     "max_z",
-    "cutoff_network",
-    "trainable_gaussians",
-    "distance_expansion",
+    "cutoff_fn",
+    "trainable_rbf",
     "charged_systems",
     "schnet",
-    "n_spatial_basis",
     "schnet_interaction",
+    "radial_basis",
     # spk.atomistic
     "properties1",
     "properties2",
@@ -37,7 +36,6 @@ __all__ = [
     "tiled_mlp_layer",
     "elements",
     "elemental_gate_layer",
-    "cutoff_layer",
     "atom_distances",
 ]
 
@@ -65,7 +63,7 @@ def cutoff():
 
 
 @pytest.fixture
-def n_gaussians():
+def n_rbf():
     return 25
 
 
@@ -90,18 +88,18 @@ def max_z():
 
 
 @pytest.fixture
-def cutoff_network():
-    return HardCutoff
+def cutoff_fn(cutoff):
+    return HardCutoff(cutoff)
 
 
 @pytest.fixture(params=[True, False])
-def trainable_gaussians(request):
+def trainable_rbf(request):
     return request.param
 
 
 @pytest.fixture
-def distance_expansion():
-    return None
+def radial_basis(n_rbf, cutoff, trainable_rbf):
+    return spk.nn.GaussianRBF(n_rbf=n_rbf, cutoff=cutoff, trainable=trainable_rbf)
 
 
 @pytest.fixture
@@ -115,49 +113,33 @@ def schnet(
     n_atom_basis,
     n_filters,
     n_interactions,
-    cutoff,
-    n_gaussians,
+    n_rbf,
     normalize_filter,
     coupled_interactions,
-    return_intermediate,
     max_z,
-    cutoff_network,
-    trainable_gaussians,
-    distance_expansion,
-    charged_systems,
+    cutoff_fn,
+    radial_basis,
 ):
     return spk.SchNet(
         n_atom_basis=n_atom_basis,
         n_filters=n_filters,
         n_interactions=n_interactions,
-        cutoff=cutoff,
-        n_gaussians=n_gaussians,
         normalize_filter=normalize_filter,
         coupled_interactions=coupled_interactions,
-        return_intermediate=return_intermediate,
         max_z=max_z,
-        cutoff_network=cutoff_network,
-        trainable_gaussians=trainable_gaussians,
-        distance_expansion=distance_expansion,
-        charged_systems=charged_systems,
+        cutoff_fn=cutoff_fn,
+        radial_basis=radial_basis,
     )
 
 
 @pytest.fixture
-def n_spatial_basis(n_gaussians):
-    return n_gaussians
-
-
-@pytest.fixture
 def schnet_interaction(
-    n_atom_basis, n_spatial_basis, n_filters, cutoff, cutoff_network, normalize_filter
+    n_atom_basis, n_rbf, n_filters, cutoff, cutoff_fn, normalize_filter
 ):
     return spk.representation.SchNetInteraction(
         n_atom_basis=n_atom_basis,
-        n_spatial_basis=n_spatial_basis,
+        n_rbf=n_rbf,
         n_filters=n_filters,
-        cutoff=cutoff,
-        cutoff_network=cutoff_network,
         normalize_filter=normalize_filter,
     )
 
@@ -207,23 +189,14 @@ def atomistic_model(schnet, output_modules):
 
 # spk.nn
 @pytest.fixture
-def gaussion_smearing_layer(n_gaussians, trainable_gaussians):
-    return spk.nn.GaussianSmearing(
-        n_gaussians=n_gaussians, trainable=trainable_gaussians
-    )
+def gaussion_smearing_layer(n_rbf, trainable_rbf):
+    return spk.nn.GaussianSmearing(n_gaussians=n_rbf, trainable=trainable_rbf)
 
 
 @pytest.fixture
-def cfconv_layer(n_atom_basis, n_filters, schnet_interaction, cutoff_layer):
+def cfconv_layer(n_atom_basis, n_filters, schnet_interaction):
     return spk.nn.CFConv(
-        n_in=n_atom_basis,
-        n_filters=n_filters,
-        n_out=n_atom_basis,
-        filter_network=schnet_interaction.filter_network,
-        cutoff_network=cutoff_layer,
-        activation=None,
-        normalize_filter=False,
-        axis=2,
+        reduce="mean" if normalize_filter else "sum",
     )
 
 
@@ -256,11 +229,6 @@ def elements():
 @pytest.fixture
 def elemental_gate_layer(elements):
     return spk.nn.ElementalGate(elements=elements)
-
-
-@pytest.fixture
-def cutoff_layer(cutoff_network, cutoff):
-    return cutoff_network(cutoff=cutoff)
 
 
 @pytest.fixture

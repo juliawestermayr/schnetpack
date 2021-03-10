@@ -71,11 +71,10 @@ class MD17(DownloadableAtomsData):
         self,
         dbpath,
         molecule=None,
-        subset=None,
         download=True,
         collect_triples=False,
         load_only=None,
-        environment_provider=spk.environment.SimpleEnvironmentProvider(),
+        environment_provider=spk.environment.AseEnvironmentProvider(5.0),
     ):
         if not os.path.exists(dbpath) and molecule is None:
             raise AtomsDataError("Provide a valid dbpath or select desired molecule!")
@@ -89,7 +88,6 @@ class MD17(DownloadableAtomsData):
 
         super(MD17, self).__init__(
             dbpath=dbpath,
-            subset=subset,
             load_only=load_only,
             collect_triples=collect_triples,
             download=download,

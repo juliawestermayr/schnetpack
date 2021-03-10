@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch import nn as nn
 from torch.autograd import grad
+from torch_scatter import segment_csr
 
 import schnetpack
 from schnetpack import nn as L, Properties
@@ -116,23 +117,14 @@ class Atomwise(nn.Module):
 
         # build standardization layer
         self.standardize = schnetpack.nn.base.ScaleShift(mean, stddev)
-
-        # build aggregation layer
-        if aggregation_mode == "sum":
-            self.atom_pool = schnetpack.nn.base.Aggregate(axis=1, mean=False)
-        elif aggregation_mode == "avg":
-            self.atom_pool = schnetpack.nn.base.Aggregate(axis=1, mean=True)
-        else:
-            raise AtomwiseError(
-                "{} is not a valid aggregation " "mode!".format(aggregation_mode)
-            )
+        self.aggregation_mode = aggregation_mode
 
     def forward(self, inputs):
         r"""
         predicts atomwise property
         """
         atomic_numbers = inputs[Properties.Z]
-        atom_mask = inputs[Properties.atom_mask]
+        seg_m = inputs[Properties.seg_m]
 
         # run prediction
         yi = self.out_net(inputs)
@@ -142,7 +134,7 @@ class Atomwise(nn.Module):
             y0 = self.atomref(atomic_numbers)
             yi = yi + y0
 
-        y = self.atom_pool(yi, atom_mask)
+        y = segment_csr(yi, seg_m, reduce=self.aggregation_mode)
 
         # collect results
         result = {self.property: y}

@@ -13,18 +13,28 @@ __all__ = [
     "cell_offset",
     "r_ij",
     "f_ij",
-    "random_atomic_env",
-    "random_interatomic_distances",
     "random_input_dim",
     "random_output_dim",
     "random_shape",
     "random_float_input",
     "random_int_input",
+    "rnd_natoms",
+    "rnd_allatoms",
+    "rnd_allnbh",
+    "rnd_atomic_numbers",
+    "rnd_nbh_idx",
+    "rnd_idx_i",
+    "rnd_idx_j",
+    "rnd_atomic_environments",
+    "rnd_atomic_environments_filter",
+    "rnd_filters",
+    "rnd_r_ij",
+    "rnd_d_ij",
+    "rnd_f_ij",
+    "rnd_rcut_ij",
     # output
     "schnet_output_shape",
-    "interaction_output_shape",
-    "cfconv_output_shape",
-    "gaussian_smearing_shape",
+    "radial_basis_shape",
 ]
 
 
@@ -76,18 +86,91 @@ def f_ij(gaussion_smearing_layer, r_ij):
     return gaussion_smearing_layer(r_ij)
 
 
-@pytest.fixture
-def random_atomic_env(batch_size, max_atoms_in_batch, n_filters):
-    return torch.rand((batch_size, max_atoms_in_batch, n_filters))
+def max_atoms():
+    return 10
 
 
 @pytest.fixture
-def random_interatomic_distances(batch_size, max_atoms_in_batch, cutoff):
-    return (
-        (1 - torch.rand((batch_size, max_atoms_in_batch, max_atoms_in_batch - 1)))
-        * 2
-        * cutoff
-    )
+def rnd_natoms(batch_size, max_atoms):
+    return torch.randint(2, max_atoms, size=(batch_size,))
+
+
+@pytest.fixture
+def rnd_nbh_idx(rnd_natoms):
+    count = 0
+    idx_i = []
+    idx_j = []
+    for natom in rnd_natoms:
+        nnbh = torch.randint(1, natom, size=(natom,))
+        idx_i.append(
+            torch.repeat_interleave(torch.arange(0, natom) + count, nnbh, dim=0)
+        )
+        idx_j.append(torch.randint(count, natom + count, size=(int(torch.sum(nnbh)),)))
+        count += natom
+
+    idx_i = torch.hstack(idx_i)
+    idx_j = torch.hstack(idx_j)
+    return (idx_i, idx_j)
+
+
+@pytest.fixture
+def rnd_idx_i(rnd_nbh_idx):
+    return rnd_nbh_idx[0]
+
+
+@pytest.fixture
+def rnd_idx_j(rnd_nbh_idx):
+    return rnd_nbh_idx[1]
+
+
+@pytest.fixture
+def rnd_allatoms(rnd_natoms):
+    return torch.sum(rnd_natoms)
+
+
+@pytest.fixture
+def rnd_atomic_numbers(rnd_allatoms, max_z):
+    return torch.randint(1, max_z, size=(rnd_allatoms,))
+
+
+@pytest.fixture
+def rnd_allnbh(rnd_idx_i):
+    return rnd_idx_i.shape[0]
+
+
+@pytest.fixture
+def rnd_atomic_environments(rnd_allatoms, n_atom_basis):
+    return torch.rand((rnd_allatoms, n_atom_basis))
+
+
+@pytest.fixture
+def rnd_atomic_environments_filter(rnd_allatoms, n_filters):
+    return torch.rand((rnd_allatoms, n_filters))
+
+
+@pytest.fixture
+def rnd_filters(rnd_allnbh, n_filters):
+    return torch.rand((rnd_allnbh, n_filters))
+
+
+@pytest.fixture
+def rnd_r_ij(rnd_allnbh, cutoff):
+    return torch.rand((rnd_allnbh, 3)) * cutoff
+
+
+@pytest.fixture
+def rnd_d_ij(rnd_r_ij):
+    return torch.norm(rnd_r_ij, dim=1)
+
+
+@pytest.fixture
+def rnd_f_ij(radial_basis, rnd_d_ij):
+    return radial_basis(rnd_d_ij)
+
+
+@pytest.fixture
+def rnd_rcut_ij(cutoff_fn, rnd_d_ij):
+    return cutoff_fn(rnd_d_ij)
 
 
 @pytest.fixture
@@ -127,12 +210,7 @@ def interaction_output_shape(batch_size, max_atoms_in_batch, n_filters):
     return [batch_size, max_atoms_in_batch, n_filters]
 
 
-@pytest.fixture
-def cfconv_output_shape(batch_size, max_atoms_in_batch, n_atom_basis):
-    return [batch_size, max_atoms_in_batch, n_atom_basis]
-
-
 # spk.nn
 @pytest.fixture
-def gaussian_smearing_shape(batch_size, max_atoms_in_batch, n_gaussians):
-    return [batch_size, max_atoms_in_batch, max_atoms_in_batch - 1, n_gaussians]
+def radial_basis_shape(rnd_allnbh, n_rbf):
+    return [rnd_allnbh, n_rbf]

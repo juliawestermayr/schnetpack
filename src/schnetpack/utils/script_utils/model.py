@@ -10,16 +10,17 @@ __all__ = ["get_representation", "get_output_module", "get_model"]
 def get_representation(args, train_loader=None):
     # build representation
     if args.model == "schnet":
-
-        cutoff_network = spk.nn.cutoff.get_cutoff_by_string(args.cutoff_function)
+        cutoff_fn = spk.nn.cutoff.get_cutoff_by_string(
+            args.cutoff_function, args.cutoff
+        )
+        radial_basis = spk.nn.GaussianRBF(args.num_gaussians, args.cutoff)
 
         return spk.representation.SchNet(
             n_atom_basis=args.features,
             n_filters=args.features,
             n_interactions=args.interactions,
-            cutoff=args.cutoff,
-            n_gaussians=args.num_gaussians,
-            cutoff_network=cutoff_network,
+            radial_basis=radial_basis,
+            cutoff_fn=cutoff_fn,
         )
 
     elif args.model == "wacsf":

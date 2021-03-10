@@ -26,8 +26,6 @@ class QM9(DownloadableAtomsData):
     Args:
         dbpath (str): path to directory containing database.
         download (bool, optional): enable downloading if database does not exists.
-        subset (list, optional): Deprecated! Do not use! Subsets are created with
-            AtomsDataSubset class.
         load_only (list, optional): reduced set of properties to be loaded
         collect_triples (bool, optional): Set to True if angular features are needed.
         remove_uncharacterized (bool, optional): remove uncharacterized molecules.
@@ -63,11 +61,10 @@ class QM9(DownloadableAtomsData):
         self,
         dbpath,
         download=True,
-        subset=None,
         load_only=None,
         collect_triples=False,
         remove_uncharacterized=False,
-        environment_provider=spk.environment.SimpleEnvironmentProvider(),
+        environment_provider=spk.environment.AseEnvironmentProvider(5.0),
         **kwargs
     ):
 
@@ -111,7 +108,6 @@ class QM9(DownloadableAtomsData):
 
         super().__init__(
             dbpath=dbpath,
-            subset=subset,
             load_only=load_only,
             collect_triples=collect_triples,
             download=download,

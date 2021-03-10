@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data._utils.collate import default_collate
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ from .stats import StatisticsAccumulator
 __all__ = ["AtomsLoader"]
 
 
-def _collate_aseatoms(examples):
+def _collate_aseatoms(batch):
     """
     Build batch from systems and properties & apply padding
 
@@ -22,77 +23,23 @@ def _collate_aseatoms(examples):
     Returns:
         dict[str->torch.Tensor]: mini-batch of atomistic systems
     """
-    properties = examples[0]
+    elem = batch[0]
 
-    # initialize maximum sizes
-    max_size = {
-        prop: np.array(val.size(), dtype=np.int) for prop, val in properties.items()
-    }
+    coll_batch = {}
+    n_atoms = torch.tensor([0] + [d[Properties.Z].shape[0] for d in batch])
+    seg_m = torch.cumsum(n_atoms, dim=0)
+    coll_batch[Properties.seg_m] = seg_m
+    coll_batch[Properties.n_atoms] = n_atoms[1:]
 
-    # get maximum sizes
-    for properties in examples[1:]:
-        for prop, val in properties.items():
-            max_size[prop] = np.maximum(
-                max_size[prop], np.array(val.size(), dtype=np.int)
+    for key in elem:
+        if key in [Properties.idx_i, Properties.idx_j]:
+            coll_batch[key] = torch.cat(
+                [d[key] + off for d, off in zip(batch, seg_m)], 0
             )
+        else:
+            coll_batch[key] = torch.cat([d[key] for d in batch], 0)
 
-    # initialize batch
-    batch = {
-        p: torch.zeros(len(examples), *[int(ss) for ss in size]).type(
-            examples[0][p].type()
-        )
-        for p, size in max_size.items()
-    }
-    has_atom_mask = Properties.atom_mask in batch.keys()
-    has_neighbor_mask = Properties.neighbor_mask in batch.keys()
-
-    if not has_neighbor_mask:
-        batch[Properties.neighbor_mask] = torch.zeros_like(
-            batch[Properties.neighbors]
-        ).float()
-    if not has_atom_mask:
-        batch[Properties.atom_mask] = torch.zeros_like(batch[Properties.Z]).float()
-
-    # If neighbor pairs are requested, construct mask placeholders
-    # Since the structure of both idx_j and idx_k is identical
-    # (not the values), only one cutoff mask has to be generated
-    if Properties.neighbor_pairs_j in properties:
-        batch[Properties.neighbor_pairs_mask] = torch.zeros_like(
-            batch[Properties.neighbor_pairs_j]
-        ).float()
-
-    # build batch and pad
-    for k, properties in enumerate(examples):
-        for prop, val in properties.items():
-            shape = val.size()
-            s = (k,) + tuple([slice(0, d) for d in shape])
-            batch[prop][s] = val
-
-        # add mask
-        if not has_neighbor_mask:
-            nbh = properties[Properties.neighbors]
-            shape = nbh.size()
-            s = (k,) + tuple([slice(0, d) for d in shape])
-            mask = nbh >= 0
-            batch[Properties.neighbor_mask][s] = mask
-            batch[Properties.neighbors][s] = nbh * mask.long()
-
-        if not has_atom_mask:
-            z = properties[Properties.Z]
-            shape = z.size()
-            s = (k,) + tuple([slice(0, d) for d in shape])
-            batch[Properties.atom_mask][s] = z > 0
-
-        # Check if neighbor pair indices are present
-        # Since the structure of both idx_j and idx_k is identical
-        # (not the values), only one cutoff mask has to be generated
-        if Properties.neighbor_pairs_j in properties:
-            nbh_idx_j = properties[Properties.neighbor_pairs_j]
-            shape = nbh_idx_j.size()
-            s = (k,) + tuple([slice(0, d) for d in shape])
-            batch[Properties.neighbor_pairs_mask][s] = nbh_idx_j >= 0
-
-    return batch
+    return coll_batch
 
 
 class AtomsLoader(DataLoader):
@@ -147,6 +94,7 @@ class AtomsLoader(DataLoader):
         timeout=0,
         worker_init_fn=None,
     ):
+        num_workers = 0
         super(AtomsLoader, self).__init__(
             dataset=dataset,
             batch_size=batch_size,
@@ -221,8 +169,5 @@ class AtomsLoader(DataLoader):
             p0 = torch.sum(torch.from_numpy(single_atom_ref[z]).float(), dim=1)
             property_value -= p0
         if divide_by_atoms:
-            mask = torch.sum(row["_atom_mask"], dim=1, keepdim=True).view(
-                [-1, 1] + [1] * (property_value.dim() - 2)
-            )
-            property_value /= mask
+            property_value /= row[Properties.n_atoms]
         statistics.add_sample(property_value)

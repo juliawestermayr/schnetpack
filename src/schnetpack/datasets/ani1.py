@@ -25,8 +25,6 @@ class ANI1(DownloadableAtomsData):
 
         dbpath (str): path to directory containing database.
         download (bool, optional): enable downloading if database does not exists.
-        subset (list, optional): Deprecated! Do not use! Subsets are created with
-            AtomsDataSubset class.
         load_only (list, optional): reduced set of properties to be loaded
         collect_triples (bool, optional): Set to True if angular features are needed.
         num_heavy_atoms (int, optional): number of heavy atoms.
@@ -58,12 +56,11 @@ class ANI1(DownloadableAtomsData):
         self,
         dbpath,
         download=True,
-        subset=None,
         load_only=None,
         collect_triples=False,
         num_heavy_atoms=8,
         high_energies=False,
-        environment_provider=spk.environment.SimpleEnvironmentProvider(),
+        environment_provider=spk.environment.AseEnvironmentProvider(5.0),
     ):
         available_properties = [ANI1.energy]
         units = [Hartree]
@@ -73,7 +70,6 @@ class ANI1(DownloadableAtomsData):
 
         super().__init__(
             dbpath=dbpath,
-            subset=subset,
             download=download,
             load_only=load_only,
             collect_triples=collect_triples,

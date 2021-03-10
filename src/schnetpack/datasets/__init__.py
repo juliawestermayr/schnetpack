@@ -4,7 +4,7 @@ Classes wrapping various standard benchmark datasets.
 
 from schnetpack import AtomsData, get_center_of_mass
 from schnetpack.data.atoms import logger
-from schnetpack.environment import SimpleEnvironmentProvider
+from schnetpack.environment import AseEnvironmentProvider
 
 
 class DownloadableAtomsData(AtomsData):
@@ -13,8 +13,6 @@ class DownloadableAtomsData(AtomsData):
 
         Args:
             dbpath (str): path to directory containing database.
-            subset (list, optional): Deprecated! Do not use! Subsets are created with
-                AtomsDataSubset class.
             available_properties (list, optional): complete set of physical properties
                 that are contained in the database.
             load_only (list, optional): reduced set of properties to be loaded
@@ -34,11 +32,10 @@ class DownloadableAtomsData(AtomsData):
     def __init__(
         self,
         dbpath,
-        subset=None,
         load_only=None,
         available_properties=None,
         units=None,
-        environment_provider=SimpleEnvironmentProvider(),
+        environment_provider=AseEnvironmentProvider(5.0),
         collect_triples=False,
         centering_function=get_center_of_mass,
         download=False,
@@ -46,7 +43,6 @@ class DownloadableAtomsData(AtomsData):
 
         super(DownloadableAtomsData, self).__init__(
             dbpath=dbpath,
-            subset=subset,
             available_properties=available_properties,
             load_only=load_only,
             units=units,

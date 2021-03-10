@@ -23,7 +23,7 @@ from torch.utils.data import Dataset, ConcatDataset, Subset
 
 import schnetpack as spk
 from schnetpack import Properties
-from schnetpack.environment import SimpleEnvironmentProvider, collect_atom_triples
+from schnetpack.environment import AseEnvironmentProvider, collect_atom_triples
 
 from tqdm import tqdm
 
@@ -99,11 +99,10 @@ class AtomsData(Dataset):
     def __init__(
         self,
         dbpath,
-        subset=None,
         available_properties=None,
         load_only=None,
         units=None,
-        environment_provider=SimpleEnvironmentProvider(),
+        environment_provider=AseEnvironmentProvider(5.0),
         collect_triples=False,
         centering_function=get_center_of_mass,
     ):
@@ -112,12 +111,6 @@ class AtomsData(Dataset):
             raise AtomsDataError(
                 "Invalid dbpath! Please make sure to add the file extension '.db' to "
                 "your dbpath."
-            )
-        if subset is not None:
-            raise AtomsDataError(
-                "The subset argument is deprecated and can not be used anymore! "
-                "Please use spk.data.partitioning.create_subset or "
-                "spk.data.AtomsDataSubset to build subsets."
             )
 
         # database
@@ -621,7 +614,7 @@ class AtomsDataSubset(Subset):
 
 def _convert_atoms(
     atoms,
-    environment_provider=SimpleEnvironmentProvider(),
+    environment_provider=AseEnvironmentProvider(5.0),
     collect_triples=False,
     centering_function=None,
     output=None,
@@ -656,29 +649,30 @@ def _convert_atoms(
     inputs[Properties.R] = positions
 
     # get atom environment
-    nbh_idx, offsets = environment_provider.get_environment(atoms)
+    idx_i, idx_j, offsets = environment_provider.get_environment(atoms)
 
     # Get neighbors and neighbor mask
-    inputs[Properties.neighbors] = nbh_idx.astype(np.int)
+    inputs[Properties.idx_i] = idx_i.astype(np.int)
+    inputs[Properties.idx_j] = idx_j.astype(np.int)
 
     # Get cells
-    inputs[Properties.cell] = np.array(atoms.cell.array, dtype=np.float32)
+    inputs[Properties.cell] = np.array([atoms.cell.array], dtype=np.float32)
     inputs[Properties.cell_offset] = offsets.astype(np.float32)
 
     # If requested get neighbor lists for triples
-    if collect_triples:
-        nbh_idx_j, nbh_idx_k, offset_idx_j, offset_idx_k = collect_atom_triples(nbh_idx)
-        inputs[Properties.neighbor_pairs_j] = nbh_idx_j.astype(np.int)
-        inputs[Properties.neighbor_pairs_k] = nbh_idx_k.astype(np.int)
-
-        inputs[Properties.neighbor_offsets_j] = offset_idx_j.astype(np.int)
-        inputs[Properties.neighbor_offsets_k] = offset_idx_k.astype(np.int)
+    # TODO: update triples to new indexing
+    # if collect_triples:
+    #     nbh_idx_j, nbh_idx_k, offset_idx_j, offset_idx_k = collect_atom_triples(nbh_idx)
+    #     inputs[Properties.neighbor_pairs_j] = nbh_idx_j.astype(np.int)
+    #     inputs[Properties.neighbor_pairs_k] = nbh_idx_k.astype(np.int)
+    #
+    #     inputs[Properties.neighbor_offsets_j] = offset_idx_j.astype(np.int)
+    #     inputs[Properties.neighbor_offsets_k] = offset_idx_k.astype(np.int)
 
     return inputs
 
 
 # def _convert_atoms_new():
-
 
 
 def torchify_dict(property_dict):
@@ -708,7 +702,7 @@ class AtomsConverter:
 
     def __init__(
         self,
-        environment_provider=SimpleEnvironmentProvider(),
+        environment_provider=AseEnvironmentProvider(5.0),
         collect_triples=False,
         device=torch.device("cpu"),
     ):

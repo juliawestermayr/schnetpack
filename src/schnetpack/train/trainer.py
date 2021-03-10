@@ -240,7 +240,8 @@ class Trainer:
 
                     if self.best_loss > val_loss:
                         self.best_loss = val_loss
-                        torch.save(self._model, self.best_model)
+                        # TODO: make compatible with torch.jit?
+                        # torch.save(self._model, self.best_model)
 
                     for h in self.hooks:
                         h.on_validation_end(self, val_loss)

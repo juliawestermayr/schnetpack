@@ -59,7 +59,7 @@ pooling_mode = {
     QM9.Cv: "sum",
     ANI1.energy: "sum",
     MD17.energy: "sum",
-    MaterialsProject.EformationPerAtom: "avg",
+    MaterialsProject.EformationPerAtom: "sum",
     MaterialsProject.EPerAtom: "avg",
     MaterialsProject.BandGap: "avg",
     MaterialsProject.TotalMagnetization: "sum",

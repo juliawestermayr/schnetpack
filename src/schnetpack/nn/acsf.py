@@ -244,7 +244,7 @@ class GaussianSmearing(nn.Module):
         )
 
 
-def gaussian_smearing2(distances, offset, widths, centered=False):
+def gaussian_smearing2(distances, offset, widths, centered: bool = False):
     r"""Smear interatomic distance values using Gaussian functions.
 
     Args:
@@ -286,8 +286,16 @@ class GaussianSmearing2(nn.Module):
             are adjusted during training process.
 
     """
+    centered: bool
 
-    def __init__(self, start=0.0, stop=5.0, n_rbf=50, centered=False, trainable=False):
+    def __init__(
+        self,
+        start: float = 0.0,
+        stop: float = 5.0,
+        n_rbf: int = 50,
+        centered: bool = False,
+        trainable: bool = False,
+    ):
         super(GaussianSmearing2, self).__init__()
         # compute offset and width of Gaussian functions
         self.n_rbf = n_rbf
@@ -299,7 +307,7 @@ class GaussianSmearing2(nn.Module):
         else:
             self.register_buffer("width", widths)
             self.register_buffer("offsets", offset)
-        self.centered = centered
+        self.centered: bool = centered
 
     def forward(self, distances):
         """Compute smeared-gaussian distance values.

@@ -2,7 +2,7 @@ import os
 
 from schnetpack.datasets import DownloadableAtomsData
 from schnetpack.data.parsing import extxyz_to_db
-from schnetpack.environment import SimpleEnvironmentProvider
+from schnetpack.environment import AseEnvironmentProvider
 
 __all__ = ["ExtXYZ"]
 
@@ -21,9 +21,8 @@ class ExtXYZ(DownloadableAtomsData):
         self,
         dbpath,
         xyzpath,
-        subset=None,
         properties=None,
-        environment_provider=SimpleEnvironmentProvider(),
+        environment_provider=AseEnvironmentProvider(5.0),
         pair_provider=None,
         centering_function=True,
     ):
@@ -36,7 +35,6 @@ class ExtXYZ(DownloadableAtomsData):
 
         super(ExtXYZ, self).__init__(
             dbpath=dbpath,
-            subset=subset,
             load_only=properties,
             environment_provider=environment_provider,
             collect_triples=pair_provider,
