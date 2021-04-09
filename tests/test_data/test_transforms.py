@@ -13,7 +13,7 @@ def assert_consistent(orig, transformed):
 
 @pytest.fixture(params=[0, 1])
 def neighbor_list(request):
-    neighbor_lists = [ASENeighborList, TorchNeighborList]
+    neighbor_lists = [ASENeighborList, TorchNeighborList, NumbaNeighborList]
     return neighbor_lists[request.param]
 
 

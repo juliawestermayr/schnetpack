@@ -8,14 +8,19 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.data import atomic_masses
 
+from numba import jit
+import numpy as np
+
 __all__ = [
     "ASENeighborList",
     "TorchNeighborList",
+    "NumbaNeighborList",
     "CastMap",
     "CastTo32",
     "SubtractCenterOfMass",
     "SubtractCenterOfGeometry",
 ]
+
 
 ## neighbor lists
 
@@ -191,6 +196,229 @@ class TorchNeighborList(nn.Module):
                 torch.cartesian_prod(o, o, r3),
             ]
         )
+
+
+class NumbaNeighborList(nn.Module):
+    """
+    Calculate neighbor list using ASE.
+
+    Note: This is quite slow and should only used as a baseline for faster implementations!
+    """
+
+    def __init__(self, cutoff, max_neighbors=10000000):
+        """
+        Args:
+            cutoff: cutoff radius for neighbor search
+        """
+        super(NumbaNeighborList, self).__init__()
+        self.cutoff = cutoff
+        self.max_neighbors = max_neighbors
+
+    def forward(self, inputs):
+        R = inputs[Structure.R].numpy()
+        cell = inputs[Structure.cell].numpy()
+        pbc = inputs[Structure.pbc].numpy()
+
+        idx_i, idx_j, idx_S, Rij = numba_neighbors(
+            R, cell, self.cutoff, pbc, max_neighbors=self.max_neighbors
+        )
+
+        inputs[Structure.idx_i] = torch.tensor(idx_i)
+        inputs[Structure.idx_j] = torch.tensor(idx_j)
+        inputs[Structure.Rij] = torch.tensor(Rij)
+        inputs[Structure.cell_offset] = torch.tensor(idx_S)
+
+        return inputs
+
+
+@jit(
+    "(float64[:, :], float64[:, :], float64, boolean[:], int64)",
+    nopython=True,
+    nogil=True,
+    fastmath=True,
+)
+def numba_neighbors(positions, cell, cutoff, pbc, max_neighbors=1000000):
+    n_atoms = positions.shape[0]
+    box = np.diag(cell)
+
+    atom_offset = np.zeros_like(positions).astype(np.int64)
+    cutoff_sq = cutoff * cutoff
+
+    cell_vec_idx = np.zeros(3).astype(np.int64)
+    offset = np.zeros(3).astype(np.int64)
+
+    n_cells = (box / cutoff).astype(np.int64)
+
+    n_total = n_cells[0] * n_cells[1] * n_cells[2]
+    lyz = n_cells[1] * n_cells[2]
+    lz = n_cells[2]
+
+    l_cells = box / n_cells
+
+    head = -np.ones(n_total).astype(np.int64)
+    lscl = -np.ones(n_atoms).astype(np.int64)
+
+    all_Rij = np.empty((max_neighbors, 3)).astype(np.float64)
+    all_offsets = np.empty((max_neighbors, 3)).astype(np.int64)
+    all_idx_i = np.empty(max_neighbors).astype(np.int64)
+    all_idx_j = np.empty(max_neighbors).astype(np.int64)
+
+    # 1) Build the cell list, assumes origin is the center of the cell
+    for idx_atom in range(n_atoms):
+        dx = positions[idx_atom] + 0.5 * box
+
+        for idx_xyz in range(3):
+            if pbc[idx_xyz]:
+                if dx[idx_xyz] < 0.0:
+                    dx[idx_xyz] = dx[idx_xyz] + box[idx_xyz]
+                if dx[idx_xyz] >= box[idx_xyz]:
+                    dx[idx_xyz] = dx[idx_xyz] - box[idx_xyz]
+
+            cell_vec_idx[idx_xyz] = dx[idx_xyz] / l_cells[idx_xyz]
+
+            if not pbc[idx_xyz]:
+                if cell_vec_idx[idx_xyz] < 0:
+                    cell_vec_idx[idx_xyz] = 0
+                if cell_vec_idx[idx_xyz] >= n_cells[idx_xyz]:
+                    cell_vec_idx[idx_xyz] = n_cells[idx_xyz] - 1
+
+        idx_cell = cell_vec_idx[0] * lyz + cell_vec_idx[1] * lz + cell_vec_idx[2]
+
+        lscl[idx_atom] = head[idx_cell]
+        head[idx_cell] = idx_atom
+
+    n_neigh = 0
+
+    # 2) translate the cell list into a Verlet list and collect the offsets
+    for idx_atom in range(n_atoms):
+
+        # TODO:
+        # a) store cell idx
+        # b) store cell vector idx
+        # c) more elegant way to dal with pbc and offsets only ONCE!
+
+        dx = positions[idx_atom] + 0.5 * box
+
+        # Wrap PBC
+        for idx_xyz in range(3):
+            if pbc[idx_xyz]:
+                if dx[idx_xyz] < 0.0:
+                    dx[idx_xyz] = dx[idx_xyz] + box[idx_xyz]
+                    atom_offset[idx_atom, idx_xyz] = 1
+                if dx[idx_xyz] >= box[idx_xyz]:
+                    dx[idx_xyz] = dx[idx_xyz] - box[idx_xyz]
+                    atom_offset[idx_atom, idx_xyz] = -1
+
+            cell_vec_idx[idx_xyz] = dx[idx_xyz] / l_cells[idx_xyz]
+
+            if not pbc[idx_xyz]:
+                if cell_vec_idx[idx_xyz] < 0:
+                    cell_vec_idx[idx_xyz] = 0
+                if cell_vec_idx[idx_xyz] >= n_cells[idx_xyz]:
+                    cell_vec_idx[idx_xyz] = n_cells[idx_xyz] - 1
+
+        for cell_x in range(cell_vec_idx[0] - 1, cell_vec_idx[0] + 2):
+
+            offset[0] = 0
+            idx_x = cell_x
+
+            # Compute offsets if pbc are requested
+            if pbc[0]:
+                if cell_x < 0:
+                    offset[0] = -1
+                if cell_x >= n_cells[0]:
+                    offset[0] = 1
+
+                # Wrap index back into box
+                idx_x = (cell_x + n_cells[0]) % n_cells[0]
+            else:
+                if cell_x < 0:
+                    continue
+                if cell_x >= n_cells[0]:
+                    continue
+
+            for cell_y in range(cell_vec_idx[1] - 1, cell_vec_idx[1] + 2):
+
+                offset[1] = 0
+                idx_y = cell_y
+
+                # Compute offsets if pbc are requested
+                if pbc[1]:
+                    if cell_y < 0:
+                        offset[1] = -1
+                    if cell_y >= n_cells[1]:
+                        offset[1] = 1
+
+                    # Wrap index back into box
+                    idx_y = (cell_y + n_cells[1]) % n_cells[1]
+                else:
+                    if cell_y < 0:
+                        continue
+                    if cell_y >= n_cells[1]:
+                        continue
+
+                for cell_z in range(cell_vec_idx[2] - 1, cell_vec_idx[2] + 2):
+
+                    offset[2] = 0
+                    idx_z = cell_z
+
+                    # Compute offsets if pbc are requested
+                    if pbc[2]:
+                        if cell_z < 0:
+                            offset[2] = -1
+                        if cell_z >= n_cells[2]:
+                            offset[2] = 1
+
+                        # Wrap index back into box
+                        idx_z = (cell_z + n_cells[2]) % n_cells[2]
+                    else:
+                        if cell_z < 0:
+                            continue
+                        if cell_z >= n_cells[2]:
+                            continue
+
+                    idx_cell_nbh = idx_x * lyz + idx_y * lz + idx_z
+
+                    # Get head of current neighbor chain
+                    idx_atom_nbh = head[idx_cell_nbh]
+
+                    while idx_atom_nbh != -1:
+
+                        # Skip self interaction
+                        if idx_atom_nbh != idx_atom:
+
+                            effective_offset = (
+                                offset
+                                - atom_offset[idx_atom]
+                                + atom_offset[idx_atom_nbh]
+                            )
+                            # print(offset, atom_offset[idx_atom], atom_offset[idx_atom_nbh], "OOO")
+                            Rij = (
+                                positions[idx_atom_nbh]
+                                - positions[idx_atom]
+                                + effective_offset * box
+                            )
+
+                            dist = Rij[0] * Rij[0] + Rij[1] * Rij[1] + Rij[2] * Rij[2]
+
+                            if dist < cutoff_sq:
+                                all_idx_i[n_neigh] = idx_atom
+                                all_idx_j[n_neigh] = idx_atom_nbh
+                                all_offsets[n_neigh] = effective_offset
+                                all_Rij[n_neigh] = Rij
+
+                                n_neigh = n_neigh + 1
+
+                        # Get next atom in link
+                        idx_atom_nbh = lscl[idx_atom_nbh]
+
+    # Reduce arrays to proper size
+    all_idx_i = all_idx_i[:n_neigh]
+    all_idx_j = all_idx_j[:n_neigh]
+    all_offsets = all_offsets[:n_neigh]
+    all_Rij = all_Rij[:n_neigh]
+
+    return all_idx_i, all_idx_j, all_offsets, all_Rij
 
 
 ## casting

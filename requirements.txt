@@ -10,6 +10,7 @@ tqdm
 pytest
 pytest-datadir
 torch-scatter
+numba
 
 pre-commit
 black
