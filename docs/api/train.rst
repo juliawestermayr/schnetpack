@@ -1,6 +1,6 @@
 schnetpack.train
 ================
-.. currentmodule:: schnetpack.train
+.. currentmodule:: train
 
 
 Callbacks
@@ -12,6 +12,7 @@ Callbacks
     :template: classtemplate.rst
 
     ModelCheckpoint
+    PredictionWriter
 
 Scheduler
 ---------

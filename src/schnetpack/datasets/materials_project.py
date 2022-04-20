@@ -18,6 +18,10 @@ class MaterialsProject(AtomsDataModule):
     This class adds convenient functions to download Materials Project data into
     pytorch.
 
+    References:
+
+        .. [#matproj] https://materialsproject.org/
+
     """
 
     # properties
@@ -38,10 +42,10 @@ class MaterialsProject(AtomsDataModule):
         load_properties: Optional[List[str]] = None,
         val_batch_size: Optional[int] = None,
         test_batch_size: Optional[int] = None,
-        transforms: Optional[torch.nn.Module] = None,
-        train_transforms: Optional[torch.nn.Module] = None,
-        val_transforms: Optional[torch.nn.Module] = None,
-        test_transforms: Optional[torch.nn.Module] = None,
+        transforms: Optional[List[torch.nn.Module]] = None,
+        train_transforms: Optional[List[torch.nn.Module]] = None,
+        val_transforms: Optional[List[torch.nn.Module]] = None,
+        test_transforms: Optional[List[torch.nn.Module]] = None,
         num_workers: int = 2,
         num_val_workers: Optional[int] = None,
         num_test_workers: Optional[int] = None,
@@ -49,6 +53,7 @@ class MaterialsProject(AtomsDataModule):
         distance_unit: Optional[str] = None,
         apikey: Optional[str] = None,
         timestamp: Optional[str] = None,
+        **kwargs
     ):
         """
 
@@ -95,6 +100,7 @@ class MaterialsProject(AtomsDataModule):
             num_test_workers=num_test_workers,
             property_units=property_units,
             distance_unit=distance_unit,
+            **kwargs
         )
         self.apikey = apikey
         self.timestamp = timestamp

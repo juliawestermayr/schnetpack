@@ -20,7 +20,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../src"))
+sys.path.insert(0, os.path.abspath("../src/schnetpack"))
 
 
 # -- General configuration ------------------------------------------------
@@ -46,7 +46,7 @@ extensions = [
     "nbsphinx",
 ]
 
-autodoc_mock_imports = ["torch"]
+autodoc_mock_imports = ["torch", "pytorch_lightning", "torchmetrics"]
 autoclass_content = "both"
 autosummary_generate = True
 
@@ -113,7 +113,7 @@ html_theme_path = ["_themes"]
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = []
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
@@ -209,3 +209,7 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/", None),
     "pytorch_lightning": ("https://pytorch-lightning.readthedocs.io/en/stable/", None),
 }
+
+import builtins
+
+builtins.sphinx = True

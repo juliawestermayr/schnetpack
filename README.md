@@ -16,10 +16,10 @@ extensible to custom atomistic architectures.
 _** Major update! Breaking changes! Under construction! **_
 
 ##### Requirements:
-- python 3
+- python 3.8
 - ASE
 - numpy
-- PyTorch (>=1.7.0)
+- PyTorch 1.9
 - hydra
 
 _**Note: We recommend using a GPU for training the neural networks.**_
@@ -63,7 +63,7 @@ You're ready to go!
 Under construction. For a first test, use:
 
 ```
-spktrain +experiment=qm9 data_dir=/path/to/data logger=[csv/aim/tensorboard]
+spktrain experiment=qm9 model/representation=painn
 ```
 
 ## Documentation

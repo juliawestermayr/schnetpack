@@ -1,6 +1,6 @@
 schnetpack.representation
 =========================
-.. currentmodule:: schnetpack.representation
+.. currentmodule:: representation
 
 
 .. rubric:: Message-passing neural networks
@@ -12,15 +12,3 @@ schnetpack.representation
 
     SchNet
     PaiNN
-
-.. rubric:: Atom-centered symmetry functions
-
-.. autosummary::
-    :toctree: generated
-    :nosignatures:
-    :template: classtemplate.rst
-
-    SymmetryFunctions
-    RadialSF
-    AngularSF
-    AngularSFANI

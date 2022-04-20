@@ -1,6 +1,6 @@
 schnetpack.nn
 =============
-.. currentmodule:: schnetpack.nn
+.. currentmodule:: nn
 
 
 Basic layers
@@ -12,7 +12,17 @@ Basic layers
     :template: classtemplate.rst
 
     Dense
-    MLP
+
+
+Equivariant layers
+------------------
+.. autosummary::
+    :toctree: generated
+    :nosignatures:
+    :template: classtemplate.rst
+
+    GatedEquivariantBlock
+
 
 Radial basis
 ------------
@@ -23,6 +33,8 @@ Radial basis
     :template: classtemplate.rst
 
     GaussianRBF
+    GaussianRBFCentered
+    BesselRBF
 
 
 Cutoff
@@ -46,3 +58,24 @@ Activations
     :template: classtemplate.rst
 
     shifted_softplus
+
+
+Ops
+---
+
+.. autosummary::
+    :toctree: generated
+    :nosignatures:
+
+    scatter_add
+
+Factory functions
+-----------------
+
+.. autosummary::
+    :toctree: generated
+    :nosignatures:
+
+    build_mlp
+    build_gated_equivariant_mlp
+    replicate_module

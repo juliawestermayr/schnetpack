@@ -9,7 +9,7 @@ from schnetpack.nn.activations import shifted_softplus
 
 import schnetpack.nn as snn
 
-__all__ = ["SchNet"]
+__all__ = ["SchNet", "SchNetInteraction"]
 
 
 class SchNetInteraction(nn.Module):
@@ -36,8 +36,7 @@ class SchNetInteraction(nn.Module):
             Dense(n_atom_basis, n_atom_basis, activation=None),
         )
         self.filter_network = nn.Sequential(
-            Dense(n_rbf, n_filters, activation=activation),
-            Dense(n_filters, n_filters),
+            Dense(n_rbf, n_filters, activation=activation), Dense(n_filters, n_filters)
         )
 
     def forward(
@@ -120,6 +119,7 @@ class SchNet(nn.Module):
         self.n_filters = n_filters or self.n_atom_basis
         self.radial_basis = radial_basis
         self.cutoff_fn = cutoff_fn
+        self.cutoff = cutoff_fn.cutoff
 
         # layers
         self.embedding = nn.Embedding(max_z, self.n_atom_basis, padding_idx=0)
@@ -136,7 +136,6 @@ class SchNet(nn.Module):
         )
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
-
         atomic_numbers = inputs[structure.Z]
         r_ij = inputs[structure.Rij]
         idx_i = inputs[structure.idx_i]
@@ -153,4 +152,5 @@ class SchNet(nn.Module):
             v = interaction(x, f_ij, idx_i, idx_j, rcut_ij)
             x = x + v
 
-        return {"scalar_representation": x}
+        inputs["scalar_representation"] = x
+        return inputs

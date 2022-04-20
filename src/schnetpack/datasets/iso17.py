@@ -21,7 +21,9 @@ class ISO17(AtomsDataModule):
     ISO17 benchmark data set for molecular dynamics of C7O2H10 isomers
     containing molecular forces.
 
-    See: http://quantum-machine.org/datasets/
+    References:
+
+    .. [#iso17] http://quantum-machine.org/datasets/
 
     """
 
@@ -50,15 +52,16 @@ class ISO17(AtomsDataModule):
         load_properties: Optional[List[str]] = None,
         val_batch_size: Optional[int] = None,
         test_batch_size: Optional[int] = None,
-        transforms: Optional[torch.nn.Module] = None,
-        train_transforms: Optional[torch.nn.Module] = None,
-        val_transforms: Optional[torch.nn.Module] = None,
-        test_transforms: Optional[torch.nn.Module] = None,
+        transforms: Optional[List[torch.nn.Module]] = None,
+        train_transforms: Optional[List[torch.nn.Module]] = None,
+        val_transforms: Optional[List[torch.nn.Module]] = None,
+        test_transforms: Optional[List[torch.nn.Module]] = None,
         num_workers: int = 2,
         num_val_workers: Optional[int] = None,
         num_test_workers: Optional[int] = None,
         property_units: Optional[Dict[str, str]] = None,
         distance_unit: Optional[str] = None,
+        **kwargs
     ):
         """
         Args:
@@ -109,6 +112,7 @@ class ISO17(AtomsDataModule):
             num_test_workers=num_test_workers,
             property_units=property_units,
             distance_unit=distance_unit,
+            **kwargs
         )
 
     def prepare_data(self):

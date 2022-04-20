@@ -3,7 +3,7 @@ from typing import Dict, Optional
 
 import torch
 
-from .transform import Transform
+from .base import Transform
 
 __all__ = ["CastMap", "CastTo32", "CastTo64"]
 
@@ -27,15 +27,11 @@ class CastMap(Transform):
     def forward(
         self,
         inputs: Dict[str, torch.Tensor],
-        results: Optional[Dict[str, torch.Tensor]] = None,
     ) -> Dict[str, torch.Tensor]:
-        if results is None:
-            results = {}
-        x = inputs if self.mode == "pre" else results
-        for k, v in x.items():
+        for k, v in inputs.items():
             if v.dtype in self.type_map:
-                x[k] = v.to(dtype=self.type_map[v.dtype])
-        return x
+                inputs[k] = v.to(dtype=self.type_map[v.dtype])
+        return inputs
 
 
 class CastTo32(CastMap):
@@ -46,7 +42,7 @@ class CastTo32(CastMap):
 
 
 class CastTo64(CastMap):
-    """Cast all float64 tensors to float32"""
+    """Cast all float32 tensors to float64"""
 
     def __init__(self):
         super().__init__(type_map={torch.float32: torch.float64})

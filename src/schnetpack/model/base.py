@@ -1,103 +1,182 @@
-from pathlib import Path
-from typing import Any, Dict, Optional, Union, Callable, List, Type
+from __future__ import annotations
+
+from typing import Dict, Optional, List
+
+from schnetpack.transform import Transform
+import schnetpack.properties as properties
 
 import torch
-from pytorch_lightning import LightningModule
 import torch.nn as nn
 
-
-import schnetpack as spk
-
-__all__ = ["AtomisticModel"]
+__all__ = ["AtomisticModel", "NeuralNetworkPotential"]
 
 
-class AtomisticModel(LightningModule):
+class AtomisticModel(nn.Module):
     """
     Base class for all SchNetPack models.
 
-    To define a new model, override and implement build_model, which has to parse the defined hydra configs
-    and instantiate the pytorch modules etc. Define  forward, training_step, optimizer etc in the appropriate
-    methods (see https://pytorch-lightning.readthedocs.io/en/stable/common/lightning_module.html)
+    SchNetPack models should subclass `AtomisticModel` implement the forward method. To use the automatic collection of
+    required derivatives, each submodule that requires gradients w.r.t to the input, should list them as strings in
+    `submodule.required_derivatives = ["input_key"]`. The model needs to call `self.collect_derivatives()` at the end
+    of its `__init__`.
+
+    To make use of post-processing transform, the model should call `input = self.postprocess(input)` at the end of
+    its `forward`. The post processors will only be applied if `do_postprocessing=True`.
+
+    Example:
+         class SimpleModel(AtomisticModel):
+            def __init__(
+                self,
+                representation: nn.Module,
+                output_module: nn.Module,
+                postprocessors: Optional[List[Transform]] = None,
+                input_dtype: torch.dtype = torch.float32,
+                do_postprocessing: bool = True,
+            ):
+                super().__init__(
+                    input_dtype=input_dtype,
+                    postprocessors=postprocessors,
+                    do_postprocessing=do_postprocessing,
+                )
+                self.representation = representation
+                self.output_modules = output_modules
+
+                self.collect_derivatives()
+
+            def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+                inputs = self.initialize_derivatives(inputs)
+
+                inputs = self.representation(inputs)
+                inputs = self.output_module(inputs)
+
+                # apply postprocessing (if enabled)
+                inputs = self.postprocess(inputs)
+                return inputs
+
     """
 
     def __init__(
         self,
-        datamodule: spk.data.AtomsDataModule,
-        representation: nn.Module,
-        output: nn.Module,
-        optimizer_cls: Type[torch.optim.Optimizer],
-        optimizer_args: Optional[Dict[str, Any]] = None,
-        scheduler_cls: Optional[Type] = None,
-        scheduler_args: Optional[Dict[str, Any]] = None,
-        scheduler_monitor: Optional[str] = None,
-        postprocess: Optional[List[spk.transform.Transform]] = None,
+        postprocessors: Optional[List[Transform]] = None,
+        input_dtype: torch.dtype = torch.float32,
+        do_postprocessing: bool = True,
     ):
         """
         Args:
-            datamodule: pytorch_lightning module for dataset
-            representation: nn.Module for atomistic representation
-            output: nn.Module for computation of physical properties from atomistic representation
-            optimizer_cls: type of torch optimizer,e.g. torch.optim.Adam
-            optimizer_args: dict of optimizer keyword arguments
-            scheduler_cls: type of torch learning rate scheduler
-            scheduler_args: dict of scheduler keyword arguments
-            scheduler_monitor: name of metric to be observed for ReduceLROnPlateau
-            postprocess: list of postprocessors to be applied to model for predictions
+            postprocessors: Post-processing transforms tha may be initialized using te `datamodule`, but are not
+                applied during training.
+            input_dtype: The dtype of real inputs.
+            do_postprocessing: If true, post-processing is activated.
         """
         super().__init__()
-        self.datamodule = datamodule
-        self.optimizer_cls = optimizer_cls
-        self.optimizer_kwargs = optimizer_args
-        self.scheduler_cls = scheduler_cls
-        self.scheduler_kwargs = scheduler_args
-        self.schedule_monitor = scheduler_monitor
+        self.input_dtype = input_dtype
+        self.do_postprocessing = do_postprocessing
+        self.postprocessors = nn.ModuleList(postprocessors)
+        self.required_derivatives: Optional[List[str]] = None
+        self.model_outputs: Optional[List[str]] = None
 
-        self.save_hyperparameters("representation", "output", "postprocess")
-        self.representation = representation
-        self.output = output
-        self.pp = postprocess or []
+    def collect_derivatives(self) -> List[str]:
+        self.required_derivatives = None
+        required_derivatives = set()
+        for m in self.modules():
+            if (
+                hasattr(m, "required_derivatives")
+                and m.required_derivatives is not None
+            ):
+                required_derivatives.update(m.required_derivatives)
+        required_derivatives: List[str] = list(required_derivatives)
+        self.required_derivatives = required_derivatives
 
-        self.inference_mode = False
+    def collect_outputs(self) -> List[str]:
+        self.model_outputs = None
+        model_outputs = set()
+        for m in self.modules():
+            if hasattr(m, "model_outputs") and m.model_outputs is not None:
+                model_outputs.update(m.model_outputs)
+        model_outputs: List[str] = list(model_outputs)
+        self.model_outputs = model_outputs
 
-    def setup(self, stage=None):
-        self.postprocessors = torch.nn.ModuleList()
-        for pp in self.pp:
-            pp.postprocessor()
-            pp.datamodule(self.datamodule)
-            self.postprocessors.append(pp)
-
-    def postprocess(
-        self, inputs: Dict[str, torch.Tensor], results: Dict[str, torch.Tensor]
+    def initialize_derivatives(
+        self, inputs: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
-        if self.inference_mode:
+        for p in self.required_derivatives:
+            if p in inputs.keys():
+                inputs[p].requires_grad_()
+        return inputs
+
+    def initialize_postprocessors(self, datamodule):
+        for pp in self.postprocessors:
+            pp.datamodule(datamodule)
+
+    def postprocess(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        if self.do_postprocessing:
+            # apply postprocessing
             for pp in self.postprocessors:
-                results = pp(inputs, results)
+                inputs = pp(inputs)
+        return inputs
+
+    def extract_outputs(
+        self, inputs: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        results = {k: inputs[k] for k in self.model_outputs}
         return results
 
-    def to_torchscript(
+
+class NeuralNetworkPotential(AtomisticModel):
+    """
+    A generic neural network potential class that sequentially applies a list of input modules, a representation module
+    and a list of output modules.
+
+    This can be flexibly configured for various, e.g. property prediction or potential energy sufaces with response
+    properties.
+    """
+
+    def __init__(
         self,
-        file_path: Optional[Union[str, Path]] = None,
-        method: Optional[str] = "script",
-        example_inputs: Optional[Any] = None,
-        **kwargs,
-    ) -> Union[torch.ScriptModule, Dict[str, torch.ScriptModule]]:
-        imode = self.inference_mode
-        self.inference_mode = True
-        script = super().to_torchscript(file_path, method, example_inputs, **kwargs)
-        self.inference_mode = imode
-        return script
-
-    def configure_optimizers(self):
-        optimizer = self.optimizer_cls(
-            params=self.parameters(), **self.optimizer_kwargs
+        representation: nn.Module,
+        input_modules: List[nn.Module] = None,
+        output_modules: List[nn.Module] = None,
+        postprocessors: Optional[List[Transform]] = None,
+        input_dtype: torch.dtype = torch.float32,
+        do_postprocessing: Optional[bool] = None,
+    ):
+        """
+        Args:
+            representation: The module that builds representation from inputs.
+            input_modules: Modules that are applied before representation, e.g. to modify input or add additional tensors for response
+                properties.
+            output_modules: Modules that predict output properties from the representation.
+            postprocessors: Post-processing transforms tha may be initialized using te `datamodule`, but are not
+                applied during training.
+            input_dtype: The dtype of real inputs.
+            do_postprocessing: If true, post-processing is activated.
+        """
+        super().__init__(
+            input_dtype=input_dtype,
+            postprocessors=postprocessors,
+            do_postprocessing=do_postprocessing,
         )
+        self.representation = representation
+        self.input_modules = nn.ModuleList(input_modules)
+        self.output_modules = nn.ModuleList(output_modules)
 
-        if self.scheduler_cls:
-            schedule = self.scheduler_cls(optimizer=optimizer, **self.scheduler_kwargs)
+        self.collect_derivatives()
+        self.collect_outputs()
 
-            optimconf = {"scheduler": schedule, "name": "lr_schedule"}
-            if self.schedule_monitor:
-                optimconf["monitor"] = self.schedule_monitor
-            return [optimizer], [optimconf]
-        else:
-            return optimizer
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        # inititalize derivatives for response properties
+        inputs = self.initialize_derivatives(inputs)
+
+        for m in self.input_modules:
+            inputs = m(inputs)
+
+        inputs = self.representation(inputs)
+
+        for m in self.output_modules:
+            inputs = m(inputs)
+
+        # apply postprocessing (if enabled)
+        inputs = self.postprocess(inputs)
+        results = self.extract_outputs(inputs)
+
+        return results

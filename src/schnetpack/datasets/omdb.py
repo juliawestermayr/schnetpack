@@ -21,9 +21,10 @@ class OrganicMaterialsDatabase(AtomsDataModule):
     (PBE) band gap (OMDB-GAP1 database) for 12500 non-magnetic materials.
 
     References:
-        arXiv: https://arxiv.org/abs/1810.12814 "Band gap prediction for large organic
-        crystal structures with machine learning" Bart Olsthoorn, R. Matthias Geilhufe,
-        Stanislav S. Borysov, Alexander V. Balatsky (Submitted on 30 Oct 2018)
+
+        .. [#omdb] Bart Olsthoorn, R. Matthias Geilhufe, Stanislav S. Borysov, Alexander V. Balatsky.
+           Band gap prediction for large organic crystal structures with machine learning.
+           https://arxiv.org/abs/1810.12814
     """
 
     BandGap = "band_gap"
@@ -40,16 +41,17 @@ class OrganicMaterialsDatabase(AtomsDataModule):
         load_properties: Optional[List[str]] = None,
         val_batch_size: Optional[int] = None,
         test_batch_size: Optional[int] = None,
-        transforms: Optional[torch.nn.Module] = None,
-        train_transforms: Optional[torch.nn.Module] = None,
-        val_transforms: Optional[torch.nn.Module] = None,
-        test_transforms: Optional[torch.nn.Module] = None,
+        transforms: Optional[List[torch.nn.Module]] = None,
+        train_transforms: Optional[List[torch.nn.Module]] = None,
+        val_transforms: Optional[List[torch.nn.Module]] = None,
+        test_transforms: Optional[List[torch.nn.Module]] = None,
         num_workers: int = 2,
         num_val_workers: Optional[int] = None,
         num_test_workers: Optional[int] = None,
         property_units: Optional[Dict[str, str]] = None,
         distance_unit: Optional[str] = None,
         raw_path: Optional[str] = None,
+        **kwargs
     ):
         """
         Args:
@@ -94,6 +96,7 @@ class OrganicMaterialsDatabase(AtomsDataModule):
             num_test_workers=num_test_workers,
             property_units=property_units,
             distance_unit=distance_unit,
+            **kwargs
         )
         self.raw_path = raw_path
 
@@ -117,6 +120,7 @@ class OrganicMaterialsDatabase(AtomsDataModule):
         Converts .tar.gz to a .db file
         """
         if self.raw_path is None or not os.path.exists(self.raw_path):
+            # TODO: can we download here automatically like QM9?
             raise AtomsDataModuleError(
                 "The path to the raw dataset is not provided or invalid and the db-file does "
                 "not exist!"

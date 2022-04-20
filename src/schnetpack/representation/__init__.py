@@ -1,3 +1,3 @@
 from .schnet import *
 from .painn import *
-from .symfuncs import *
+from .field_schnet import *

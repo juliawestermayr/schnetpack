@@ -1,33 +1,69 @@
-from typing import Dict, Any
+from copy import copy
+from typing import Dict
+
+from pytorch_lightning.callbacks import ModelCheckpoint as BaseModelCheckpoint
 
 import torch
+import os
+from pytorch_lightning.callbacks import BasePredictionWriter
+from typing import List, Any
+from schnetpack.task import AtomisticTask
 
-import schnetpack as spk
-from pytorch_lightning.callbacks import ModelCheckpoint
-
-__all__ = ["ModelCheckpoint"]
+__all__ = ["ModelCheckpoint", "PredictionWriter"]
 
 
-class ModelCheckpoint(ModelCheckpoint):
+class PredictionWriter(BasePredictionWriter):
     """
-    Just like the PyTorch Lightning ModelCheckpoint callback,
-    but also saves the best inference model
+    Callback to store prediction results using ``torch.save``.
     """
 
-    def __init__(
+    def __init__(self, output_dir: str, write_interval: str):
+        """
+        Args:
+            output_dir: output directory for prediction files
+            write_interval: can be one of ["batch", "epoch", "batch_and_epoch"]
+        """
+        super().__init__(write_interval)
+        self.output_dir = output_dir
+        os.makedirs(output_dir, exist_ok=True)
+
+    def write_on_batch_end(
         self,
-        inference_path: str,
-        save_as_torch_script: bool = True,
-        method: str = "script",
-        *args,
-        **kwargs
+        trainer,
+        pl_module: AtomisticTask,
+        prediction: Any,
+        batch_indices: List[int],
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int,
     ):
-        super().__init__(*args, **kwargs)
-        self.save_as_torch_script = save_as_torch_script
-        self.inference_path = inference_path
-        self.method = method
+        bdir = os.path.join(self.output_dir, str(dataloader_idx))
+        os.makedirs(bdir, exist_ok=True)
+        torch.save(prediction, os.path.join(bdir, f"{batch_idx}.pt"))
 
-    def on_validation_end(self, trainer, pl_module) -> None:
+    def write_on_epoch_end(
+        self,
+        trainer,
+        pl_module: AtomisticTask,
+        predictions: List[Any],
+        batch_indices: List[Any],
+    ):
+        torch.save(predictions, os.path.join(self.output_dir, "predictions.pt"))
+
+
+class ModelCheckpoint(BaseModelCheckpoint):
+    """
+    Like the PyTorch Lightning ModelCheckpoint callback,
+    but also saves the best inference model with activated post-processing
+    """
+
+    def __init__(self, inference_path: str, do_postprocessing=True, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.inference_path = inference_path
+        self.do_postprocessing = do_postprocessing
+
+    def on_validation_end(self, trainer, pl_module: AtomisticTask) -> None:
+        self.trainer = trainer
         self.pl_module = pl_module
         super().on_validation_end(trainer, pl_module)
 
@@ -42,16 +78,17 @@ class ModelCheckpoint(ModelCheckpoint):
             current = torch.tensor(float("inf" if self.mode == "min" else "-inf"))
 
         if current == self.best_model_score:
-            if self.save_as_torch_script:
-                self.pl_module.to_torchscript(self.inference_path, method=self.method)
-            else:
-                if isinstance(self.pl_module, spk.model.AtomisticModel):
-                    imode = self.pl_module.inference_mode
-                    self.pl_module.inference_mode = True
-                mode = self.pl_module.training
+            if self.trainer.training_type_plugin.should_rank_save_checkpoint:
+                # remove references to trainer and data loaders to avoid pickle error in ddp
+                model = self.pl_module.model
+                pp_status = model.do_postprocessing
 
-                torch.save(self.pl_module, self.inference_path)
+                if self.do_postprocessing:
+                    model.do_postprocessing = True
 
-                if isinstance(self.pl_module, spk.model.AtomisticModel):
-                    self.pl_module.inference_mode = imode
-                self.pl_module.train(mode)
+                model.eval()
+                torch.save(model, self.inference_path)
+                model.train()
+
+                if self.do_postprocessing:
+                    model.do_postprocessing = pp_status

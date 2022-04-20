@@ -1,7 +1,8 @@
 schnetpack.transform
 ====================
-.. currentmodule:: schnetpack.transform
+.. automodule:: transform
 
+.. currentmodule:: transform
 .. autoclass:: Transform
 
 
@@ -40,3 +41,6 @@ Neighbor lists
 
     ASENeighborList
     TorchNeighborList
+    CachedNeighborList
+    CountNeighbors
+    CollectAtomTriples
