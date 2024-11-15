@@ -206,7 +206,7 @@ def get_dataset(args, environment_provider, logging=None):
             load_only=load_only,
             collect_triples=args.model == "wacsf",
             environment_provider=environment_provider,
-            mlmm=args.mlmm_indices,
+            mlmm=args.mlmm,
         )
         return dataset
     else:

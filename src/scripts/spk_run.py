@@ -128,10 +128,9 @@ def main(args):
     # load MLMM indices
     if args.mlmm is not None:
         mlmm_indices = get_indices_mlmm(args.mlmm) 
-        train_args.mlmm_indices = mlmm_indices
+        train_args.mlmm = mlmm_indices
     else:
-        args.mlmm_indices = None
-        train_args.mlmm_indices = None
+        train_args.mlmm = None
  
     # get dataset
     environment_provider = get_environment_provider(train_args, device=device)
